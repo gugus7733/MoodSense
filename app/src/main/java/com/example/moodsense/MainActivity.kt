@@ -12,7 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.moodsense.ui.theme.MoodSenseTheme
-
+import android.util.Log
+import com.spotify.android.appremote.api.ConnectionParams
+import com.spotify.android.appremote.api.Connector
+import com.spotify.android.appremote.api.SpotifyAppRemote
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,6 +29,36 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+    private var spotifyAppRemote: SpotifyAppRemote? = null
+
+    override fun onStart() {
+        super.onStart()
+
+        val connectionParams = ConnectionParams.Builder(Config.SPOTIFY_CLIENT_ID)
+            .setRedirectUri(Config.SPOTIFY_REDIRECT_URI)
+            .showAuthView(true)
+            .build()
+
+        SpotifyAppRemote.connect(this, connectionParams, object : Connector.ConnectionListener {
+            override fun onConnected(appRemote: SpotifyAppRemote) {
+                spotifyAppRemote = appRemote
+                Log.d("MoodSense", "Connecté à Spotify !")
+                // Exemple : lancer un morceau
+                spotifyAppRemote?.playerApi?.play("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")
+            }
+
+            override fun onFailure(throwable: Throwable) {
+                Log.e("MoodSense", "Erreur connexion Spotify", throwable)
+            }
+        })
+    }
+
+    override fun onStop() {
+        super.onStop()
+        spotifyAppRemote?.let {
+            SpotifyAppRemote.disconnect(it)
         }
     }
 }
