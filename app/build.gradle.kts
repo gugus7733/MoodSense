@@ -56,5 +56,10 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation(libs.spotify.app.remote)
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.code.gson:gson:2.6.1")
+    implementation(files("../libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation(files("../libs/spotify-auth-release-2.1.0.aar"))
+
+
 }

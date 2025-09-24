@@ -22,3 +22,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "MoodSense"
 include(":app")
+//include(":auth-sample")
+include(":app-remote-lib")
+include(":auth-lib")
+//include(":app-remote-sample")
