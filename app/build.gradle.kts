@@ -59,7 +59,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.6.1")
     implementation(files("../libs/spotify-app-remote-release-0.8.0.aar"))
-    implementation(files("../libs/spotify-auth-release-2.1.0.aar"))
-
+    //implementation(files("../libs/spotify-auth-release-2.1.0.aar"))
 
 }
