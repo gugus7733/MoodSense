@@ -1,76 +1,96 @@
 package com.example.moodsense
 
-import android.os.Bundle
-import com.example.moodsense.ui.theme.MoodSenseTheme
-
-import androidx.appcompat.app.AppCompatActivity
-import androidx.activity.ComponentActivity // Changed
-import androidx.activity.compose.setContent
-
-import android.util.Log;
-
-import com.spotify.android.appremote.api.ConnectionParams;
-import com.spotify.android.appremote.api.Connector;
-import com.spotify.android.appremote.api.SpotifyAppRemote;
-
-import com.spotify.protocol.client.Subscription;
-import com.spotify.protocol.types.PlayerState;
-import com.spotify.protocol.types.Track;
-
 import android.content.Intent
+import android.os.Bundle
+import android.util.Log
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.spotify.android.appremote.api.ConnectionParams
+import com.spotify.android.appremote.api.Connector
+import com.spotify.android.appremote.api.SpotifyAppRemote
+import com.spotify.protocol.types.Track
+import com.spotify.sdk.android.auth.AuthorizationClient
+import com.spotify.sdk.android.auth.AuthorizationRequest
+import com.spotify.sdk.android.auth.AuthorizationResponse
 
 class MainActivity : AppCompatActivity() {
 
     private val clientId = "4d864f8662144971ba0242cea48bfebf"
-
     private val redirectUri = "moodsense://callback"
     private var spotifyAppRemote: SpotifyAppRemote? = null
 
+    private val AUTH_REQUEST_CODE = 1337
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Setup button listeners
+        findViewById<Button>(R.id.play_button).setOnClickListener { spotifyAppRemote?.playerApi?.resume() }
+        findViewById<Button>(R.id.pause_button).setOnClickListener { spotifyAppRemote?.playerApi?.pause() }
+        findViewById<Button>(R.id.next_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipNext() }
+        findViewById<Button>(R.id.prev_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipPrevious() }
     }
 
-    override fun onStart() {
-        super.onStart()
+    override fun onResume() {
+        super.onResume()
+        val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, redirectUri)
+        builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
+        val request = builder.build()
+        AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
+        super.onActivityResult(requestCode, resultCode, intent)
+
+        if (requestCode == AUTH_REQUEST_CODE) {
+            val response = AuthorizationClient.getResponse(resultCode, intent)
+
+            when (response.type) {
+                AuthorizationResponse.Type.CODE -> {
+                    val code = response.code
+                    Log.d("MainActivity", "Got authorization code: $code")
+                    connectToSpotifyAppRemote()
+                }
+                AuthorizationResponse.Type.ERROR -> {
+                    Log.e("MainActivity", "Auth error: " + response.error)
+                }
+                else -> {
+                    Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
+                }
+            }
+        }
+    }
+
+    private fun connectToSpotifyAppRemote() {
         val connectionParams = ConnectionParams.Builder(clientId)
             .setRedirectUri(redirectUri)
-            .showAuthView(true)
+            .showAuthView(true) // Show auth view if necessary
             .build()
 
         SpotifyAppRemote.connect(this, connectionParams, object : Connector.ConnectionListener {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 spotifyAppRemote = appRemote
                 Log.d("MainActivity", "Connected! Yay!")
-                // Now you can start interacting with App Remote
                 connected()
             }
 
             override fun onFailure(throwable: Throwable) {
                 Log.e("MainActivity", throwable.message, throwable)
-                // Something went wrong when attempting to connect! Handle errors here
             }
         })
     }
+
     private fun connected() {
-        /*  spotifyAppRemote?.let {
-            // Play a playlist
-            val playlistURI = "spotify:playlist:37i9dQZF1DX2sUQwD7tbmL"
-            it.playerApi.play(playlistURI)
-            // Subscribe to PlayerState
-            it.playerApi.subscribeToPlayerState().setEventCallback {
-                val track: Track = it.track
-                Log.d("MainActivity", track.name + " by " + track.artist.name)
-            }
-        } */
-        // Play a playlist
         spotifyAppRemote?.playerApi?.play("spotify:playlist:37i9dQZF1DX2sUQwD7tbmL")
 
-        // Subscribe to PlayerState
-        spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback {
-            val track: Track = it.track
-            Log.d("MainActivity", track.name + " by " + track.artist.name)
+        spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback { playerState ->
+            val track: Track? = playerState.track
+            if (track != null) {
+                findViewById<TextView>(R.id.track_name_textview).text = "Track: ${track.name} by ${track.artist.name}"
+                Log.d("MainActivity", "${track.name} by ${track.artist.name}")
+            }
         }
     }
 
@@ -81,4 +101,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-
