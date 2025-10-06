@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
     private fun connected() {
-        spotifyAppRemote?.let {
+        /*  spotifyAppRemote?.let {
             // Play a playlist
             val playlistURI = "spotify:playlist:37i9dQZF1DX2sUQwD7tbmL"
             it.playerApi.play(playlistURI)
@@ -63,8 +63,15 @@ class MainActivity : AppCompatActivity() {
                 val track: Track = it.track
                 Log.d("MainActivity", track.name + " by " + track.artist.name)
             }
-        }
+        } */
+        // Play a playlist
+        spotifyAppRemote?.playerApi?.play("spotify:playlist:37i9dQZF1DX2sUQwD7tbmL")
 
+        // Subscribe to PlayerState
+        spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback {
+            val track: Track = it.track
+            Log.d("MainActivity", track.name + " by " + track.artist.name)
+        }
     }
 
     override fun onStop() {
@@ -72,7 +79,6 @@ class MainActivity : AppCompatActivity() {
         spotifyAppRemote?.let {
             SpotifyAppRemote.disconnect(it)
         }
-
     }
 }
 

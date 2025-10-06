@@ -16,6 +16,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        defaultConfig {
+            manifestPlaceholders.putAll(
+                mapOf(
+                    "moodsense" to "moodsense",
+                    "callback" to "callback"
+                )
+            )
+        }
     }
 
     buildTypes {
