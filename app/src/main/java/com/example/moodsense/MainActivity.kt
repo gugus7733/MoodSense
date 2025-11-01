@@ -1,5 +1,6 @@
 package com.example.moodsense
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -7,10 +8,12 @@ import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
+import com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp
 import com.spotify.protocol.types.Track
 import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationRequest
@@ -21,6 +24,14 @@ class MainActivity : AppCompatActivity() {
     private val clientId = "4d864f8662144971ba0242cea48bfebf"
     private val redirectUri = "moodsense://callback"
     private var spotifyAppRemote: SpotifyAppRemote? = null
+    private var accessToken: String? = null
+    private var browserAuthInProgress = false
+
+    private val requiredScopes = arrayOf(
+        "user-read-playback-state",
+        "user-modify-playback-state",
+        "app-remote-control"
+    )
 
     private val AUTH_REQUEST_CODE = 1337
 
@@ -45,6 +56,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.pause_button).setOnClickListener { spotifyAppRemote?.playerApi?.pause() }
         findViewById<Button>(R.id.next_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipNext() }
         findViewById<Button>(R.id.prev_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipPrevious() }
+
+        setPlaybackControlsEnabled(false)
     }
 
     override fun onResume() {
@@ -55,7 +68,11 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, intent)
 
         if (requestCode == AUTH_REQUEST_CODE) {
-            val response = AuthorizationClient.getResponse(resultCode, intent)
+            intent?.let {
+                handleAuthorizationResponse(AuthorizationClient.getResponse(resultCode, it))
+            }
+        }
+    }
 
             when (response.type) {
                 AuthorizationResponse.Type.CODE -> {
@@ -72,10 +89,27 @@ class MainActivity : AppCompatActivity() {
                     statusTextView.text = "Auth flow cancelled"
                 }
             }
+            else -> {
+                Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
+                Toast.makeText(
+                    this,
+                    getString(R.string.spotify_auth_cancelled),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
     private fun connectToSpotifyAppRemote() {
+        if (!SpotifyAppRemote.isSpotifyInstalled(applicationContext)) {
+            Toast.makeText(
+                this,
+                getString(R.string.install_spotify_prompt),
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
         val connectionParams = ConnectionParams.Builder(clientId)
             .setRedirectUri(redirectUri)
             .showAuthView(true) // Show auth view if necessary
@@ -110,6 +144,8 @@ class MainActivity : AppCompatActivity() {
                 Log.d("MainActivity", "${track.name} by ${track.artist.name}")
             }
         }
+
+        setPlaybackControlsEnabled(true)
     }
 
     override fun onStop() {
@@ -117,5 +153,14 @@ class MainActivity : AppCompatActivity() {
         spotifyAppRemote?.let {
             SpotifyAppRemote.disconnect(it)
         }
+        spotifyAppRemote = null
+        setPlaybackControlsEnabled(false)
+    }
+
+    private fun setPlaybackControlsEnabled(isEnabled: Boolean) {
+        findViewById<Button>(R.id.play_button).isEnabled = isEnabled
+        findViewById<Button>(R.id.pause_button).isEnabled = isEnabled
+        findViewById<Button>(R.id.next_button).isEnabled = isEnabled
+        findViewById<Button>(R.id.prev_button).isEnabled = isEnabled
     }
 }

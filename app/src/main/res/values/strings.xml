@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">MoodSense</string>
+    <string name="install_spotify_prompt">Install the Spotify app and sign in to continue.</string>
+    <string name="browser_missing_error">No browser available to complete Spotify login.</string>
+    <string name="spotify_auth_failed">We could not authenticate with Spotify. Please try again.</string>
+    <string name="spotify_auth_cancelled">Spotify authentication cancelled.</string>
+    <string name="spotify_connection_failed">Unable to connect to Spotify. Please try again.</string>
+    <string name="spotify_service_unavailable_retry">Spotify temporarily unavailable. Retrying in browser…</string>
+    <string name="connect_to_spotify">Connect to Spotify</string>
 </resources>

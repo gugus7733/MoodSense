@@ -1,6 +1,7 @@
 [versions]
 agp = "8.13.0"
-auth = "version"
+spotifyAppRemote = "0.8.0"
+spotifyAuth = "2.1.0"
 kotlin = "2.0.21"
 coreKtx = "1.10.1"
 junit = "4.13.2"
@@ -12,8 +13,8 @@ composeBom = "2024.09.00"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-app-remote = { module = "com.spotify.android:app-remote", version.ref = "auth" }
-auth = { module = "com.spotify.android:auth", version.ref = "auth" }
+app-remote = { module = "com.spotify.android:app-remote", version.ref = "spotifyAppRemote" }
+auth = { module = "com.spotify.android:auth", version.ref = "spotifyAuth" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
