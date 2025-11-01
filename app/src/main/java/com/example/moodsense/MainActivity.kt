@@ -3,7 +3,9 @@ package com.example.moodsense
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.spotify.android.appremote.api.ConnectionParams
@@ -22,11 +24,23 @@ class MainActivity : AppCompatActivity() {
 
     private val AUTH_REQUEST_CODE = 1337
 
+    private lateinit var statusTextView: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        statusTextView = findViewById(R.id.status_textview)
+
         // Setup button listeners
+        findViewById<Button>(R.id.connect_button).setOnClickListener {
+            statusTextView.visibility = View.VISIBLE
+            statusTextView.text = "Connecting..."
+            val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, redirectUri)
+            builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
+            val request = builder.build()
+            AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
+        }
         findViewById<Button>(R.id.play_button).setOnClickListener { spotifyAppRemote?.playerApi?.resume() }
         findViewById<Button>(R.id.pause_button).setOnClickListener { spotifyAppRemote?.playerApi?.pause() }
         findViewById<Button>(R.id.next_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipNext() }
@@ -35,10 +49,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, redirectUri)
-        builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
-        val request = builder.build()
-        AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
@@ -55,9 +65,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 AuthorizationResponse.Type.ERROR -> {
                     Log.e("MainActivity", "Auth error: " + response.error)
+                    statusTextView.text = "Auth error: ${response.error}"
                 }
                 else -> {
                     Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
+                    statusTextView.text = "Auth flow cancelled"
                 }
             }
         }
@@ -73,16 +85,22 @@ class MainActivity : AppCompatActivity() {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 spotifyAppRemote = appRemote
                 Log.d("MainActivity", "Connected! Yay!")
+                statusTextView.text = "Connected!"
                 connected()
             }
 
             override fun onFailure(throwable: Throwable) {
                 Log.e("MainActivity", throwable.message, throwable)
+                statusTextView.text = "Connection failed: ${throwable.message}"
             }
         })
     }
 
     private fun connected() {
+        findViewById<Button>(R.id.connect_button).visibility = View.GONE
+        findViewById<LinearLayout>(R.id.player_controls).visibility = View.VISIBLE
+        findViewById<TextView>(R.id.track_name_textview).visibility = View.VISIBLE
+
         spotifyAppRemote?.playerApi?.play("spotify:playlist:37i9dQZF1DX2sUQwD7tbmL")
 
         spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback { playerState ->
