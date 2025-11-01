@@ -31,7 +31,7 @@ android {
     // Add kotlinOptions if using Kotlin
     // kotlinOptions {
     //    jvmTarget = '1.8'
-    // }
+    //}
 }
 
 dependencies {
