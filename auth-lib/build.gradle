@@ -1,0 +1,45 @@
+// In F:\Divers\AndroidStudioProjects\MoodSense\app-remote-lib\build.gradle
+
+plugins {
+    id 'com.android.library'
+    // Add other plugins like kotlin-android if needed
+    // id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace = "com.example.authlib" // MAKE SURE TO SET A UNIQUE NAMESPACE
+    compileSdk = 36 // Or your desired SDK version
+
+    defaultConfig {
+        minSdk = 24 // Or your desired minSdk
+        // targetSdk = 36 // targetSdk is not typically needed in library modules
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    // Add compileOptions if you need specific Java version compatibility
+    // compileOptions {
+    //     sourceCompatibility JavaVersion.VERSION_1_8
+    //     targetCompatibility JavaVersion.VERSION_1_8
+    // }
+    // Add kotlinOptions if using Kotlin
+    // kotlinOptions {
+    //    jvmTarget = '1.8'
+    // }
+}
+
+dependencies {
+    // Add any dependencies specific to this library
+    // implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version" // if using Kotlin
+    // api(libs.auth) // Or implementation, depending on your needs
+    // api(libs.app.remote)
+}
+
+configurations.maybeCreate("default")
+artifacts.add("default", file("spotify-auth-release-2.1.0.aar")) // Replace with your AAR file name

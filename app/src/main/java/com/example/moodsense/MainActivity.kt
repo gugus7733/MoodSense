@@ -4,7 +4,9 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -33,12 +35,23 @@ class MainActivity : AppCompatActivity() {
 
     private val AUTH_REQUEST_CODE = 1337
 
+    private lateinit var statusTextView: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        statusTextView = findViewById(R.id.status_textview)
+
         // Setup button listeners
-        findViewById<Button>(R.id.connect_button).setOnClickListener { startSpotifyAuthorization() }
+        findViewById<Button>(R.id.connect_button).setOnClickListener {
+            statusTextView.visibility = View.VISIBLE
+            statusTextView.text = "Connecting..."
+            val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, redirectUri)
+            builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
+            val request = builder.build()
+            AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
+        }
         findViewById<Button>(R.id.play_button).setOnClickListener { spotifyAppRemote?.playerApi?.resume() }
         findViewById<Button>(R.id.pause_button).setOnClickListener { spotifyAppRemote?.playerApi?.pause() }
         findViewById<Button>(R.id.next_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipNext() }
@@ -47,11 +60,8 @@ class MainActivity : AppCompatActivity() {
         setPlaybackControlsEnabled(false)
     }
 
-    override fun onStart() {
-        super.onStart()
-        if (spotifyAppRemote == null && accessToken != null) {
-            connectToSpotifyAppRemote()
-        }
+    override fun onResume() {
+        super.onResume()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
@@ -64,85 +74,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-
-        if (browserAuthInProgress && intent?.data != null) {
-            val response = AuthorizationResponse.fromUri(intent.data!!)
-            browserAuthInProgress = false
-            handleAuthorizationResponse(response)
-        }
-    }
-
-    private fun startSpotifyAuthorization(forceBrowser: Boolean = false) {
-        val request = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.TOKEN, redirectUri)
-            .setScopes(requiredScopes)
-            .setShowDialog(false)
-            .build()
-
-        if (forceBrowser) {
-            openAuthorizationInBrowser(request)
-            return
-        }
-
-        if (SpotifyAppRemote.isSpotifyInstalled(applicationContext)) {
-            AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
-        } else {
-            openAuthorizationInBrowser(request)
-            Toast.makeText(
-                this,
-                getString(R.string.install_spotify_prompt),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    private fun openAuthorizationInBrowser(request: AuthorizationRequest) {
-        browserAuthInProgress = true
-        try {
-            AuthorizationClient.openLoginInBrowser(this, request)
-        } catch (error: ActivityNotFoundException) {
-            browserAuthInProgress = false
-            Log.e("MainActivity", "No browser available for Spotify login", error)
-            Toast.makeText(
-                this,
-                getString(R.string.browser_missing_error),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    private fun handleAuthorizationResponse(response: AuthorizationResponse) {
-        browserAuthInProgress = false
-        when (response.type) {
-            AuthorizationResponse.Type.TOKEN -> {
-                accessToken = response.accessToken
-                Log.d("MainActivity", "Got access token")
-                connectToSpotifyAppRemote()
-            }
-            AuthorizationResponse.Type.ERROR -> {
-                Log.e("MainActivity", "Auth error: ${response.error}")
-                if (response.error.equals("AUTHENTICATION_SERVICE_UNAVAILABLE", ignoreCase = true)) {
-                    if (SpotifyAppRemote.isSpotifyInstalled(applicationContext)) {
-                        Toast.makeText(
-                            this,
-                            getString(R.string.spotify_service_unavailable_retry),
-                            Toast.LENGTH_LONG
-                        ).show()
-                        startSpotifyAuthorization(forceBrowser = true)
-                    } else {
-                        Toast.makeText(
-                            this,
-                            getString(R.string.install_spotify_prompt),
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } else {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.spotify_auth_failed),
-                        Toast.LENGTH_LONG
-                    ).show()
+            when (response.type) {
+                AuthorizationResponse.Type.CODE -> {
+                    val code = response.code
+                    Log.d("MainActivity", "Got authorization code: $code")
+                    connectToSpotifyAppRemote()
+                }
+                AuthorizationResponse.Type.ERROR -> {
+                    Log.e("MainActivity", "Auth error: " + response.error)
+                    statusTextView.text = "Auth error: ${response.error}"
+                }
+                else -> {
+                    Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
+                    statusTextView.text = "Auth flow cancelled"
                 }
             }
             else -> {
@@ -175,32 +119,22 @@ class MainActivity : AppCompatActivity() {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 spotifyAppRemote = appRemote
                 Log.d("MainActivity", "Connected! Yay!")
+                statusTextView.text = "Connected!"
                 connected()
             }
 
             override fun onFailure(throwable: Throwable) {
                 Log.e("MainActivity", throwable.message, throwable)
-                spotifyAppRemote = null
-                setPlaybackControlsEnabled(false)
-
-                if (throwable is CouldNotFindSpotifyApp) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.install_spotify_prompt),
-                        Toast.LENGTH_LONG
-                    ).show()
-                } else {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.spotify_connection_failed),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                statusTextView.text = "Connection failed: ${throwable.message}"
             }
         })
     }
 
     private fun connected() {
+        findViewById<Button>(R.id.connect_button).visibility = View.GONE
+        findViewById<LinearLayout>(R.id.player_controls).visibility = View.VISIBLE
+        findViewById<TextView>(R.id.track_name_textview).visibility = View.VISIBLE
+
         spotifyAppRemote?.playerApi?.play("spotify:playlist:37i9dQZF1DX2sUQwD7tbmL")
 
         spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback { playerState ->
