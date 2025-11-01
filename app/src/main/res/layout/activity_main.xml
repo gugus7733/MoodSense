@@ -7,6 +7,13 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
+    <Button
+        android:id="@+id/connect_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/connect_to_spotify" />
+
     <TextView
         android:id="@+id/track_name_textview"
         android:layout_width="wrap_content"
