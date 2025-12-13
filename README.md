@@ -19,13 +19,14 @@ MoodSense is an Android application that connects to Spotify so you can control 
 ## Using the app
 
 1. Launch MoodSense and tap **Connect to Spotify**.
-2. If the Spotify app is installed, the Spotify login screen appears. Complete the login flow. If the app is not installed or cannot be reached, the app falls back to the browser-based authentication flow.
-3. After a successful login, MoodSense connects to the Spotify App Remote SDK. Playback controls become enabled and you can play, pause, skip, and go to the previous track. The currently playing track name appears at the top of the screen.
+2. Complete the Spotify login flow (implicit token grant). After a successful login, MoodSense connects to the Spotify App Remote SDK. Playback controls become enabled and you can play, pause, skip, and go to the previous track. The currently playing track name appears at the top of the screen.
+3. Toggle **Show diagnostics** to inspect the current environment (emulator detection, Spotify install status, network, redirect URI, last errors) and the live debug log. Tap **Copy diagnostics** to share the collected information.
 4. The app automatically disables playback controls if the connection drops or when the activity stops.
 
-## Troubleshooting
+## Troubleshooting and diagnostics
 
-- **`AUTHENTICATION_SERVICE_UNAVAILABLE` error**: MoodSense now detects this condition and retries the authentication using the browser flow. Make sure the Spotify service is reachable (internet connection) and that the Spotify app is installed if you want to control playback on the device.
-- **Cannot connect to Spotify**: Ensure the Spotify app is running and that you are logged in with a Spotify Premium account, which is required for remote playback control.
-- **Login opens in the browser**: This is normal when the Spotify app is not available. After completing login, you are redirected back to MoodSense automatically.
+- **Running on an emulator:** The diagnostics panel will state if the device looks like an emulator. Spotify App Remote frequently fails on emulators because the Spotify app or Play services are missing. Prefer testing on a physical device with Spotify installed and logged in.
+- **`AUTHENTICATION_SERVICE_UNAVAILABLE` or repeated authentication failures:** The diagnostics panel shows the full error chain and suggests likely causes. Verify Spotify is installed and logged in, the network is available, and the redirect URI `moodsense://callback` matches the manifest intent-filter.
+- **Spotify not installed:** The connect flow will stop early and display guidance. Install the Spotify app from the Play Store and log in before retrying.
+- **Copying diagnostics:** Use the **Copy diagnostics** button to capture the device info, network summary, redirect URI, auth/connect status, and the most recent log lines for further debugging.
 
