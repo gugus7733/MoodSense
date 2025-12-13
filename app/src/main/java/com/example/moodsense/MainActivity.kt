@@ -1,6 +1,5 @@
 package com.example.moodsense
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -13,7 +12,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
-import com.spotify.android.appremote.api.error.CouldNotFindSpotifyApp
 import com.spotify.protocol.types.Track
 import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationRequest
@@ -24,14 +22,6 @@ class MainActivity : AppCompatActivity() {
     private val clientId = "4d864f8662144971ba0242cea48bfebf"
     private val redirectUri = "moodsense://callback"
     private var spotifyAppRemote: SpotifyAppRemote? = null
-    private var accessToken: String? = null
-    private var browserAuthInProgress = false
-
-    private val requiredScopes = arrayOf(
-        "user-read-playback-state",
-        "user-modify-playback-state",
-        "app-remote-control"
-    )
 
     private val AUTH_REQUEST_CODE = 1337
 
@@ -68,51 +58,42 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, intent)
 
         if (requestCode == AUTH_REQUEST_CODE) {
-            intent?.let {
-                handleAuthorizationResponse(AuthorizationClient.getResponse(resultCode, it))
-            }
+            val response = AuthorizationClient.getResponse(resultCode, intent)
+            handleAuthorizationResponse(response)
         }
     }
 
-            when (response.type) {
-                AuthorizationResponse.Type.CODE -> {
-                    val code = response.code
-                    Log.d("MainActivity", "Got authorization code: $code")
-                    connectToSpotifyAppRemote()
-                }
-                AuthorizationResponse.Type.ERROR -> {
-                    Log.e("MainActivity", "Auth error: " + response.error)
-                    statusTextView.text = "Auth error: ${response.error}"
-                }
-                else -> {
-                    Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
-                    statusTextView.text = "Auth flow cancelled"
-                }
+    private fun handleAuthorizationResponse(response: AuthorizationResponse) {
+        when (response.type) {
+            AuthorizationResponse.Type.CODE -> {
+                val code = response.code
+                Log.d("MainActivity", "Got authorization code: $code")
+                connectToSpotifyAppRemote()
             }
-            else -> {
-                Log.w("MainActivity", "Auth flow cancelled or unknown response type: ${response.type}")
-                Toast.makeText(
-                    this,
-                    getString(R.string.spotify_auth_cancelled),
-                    Toast.LENGTH_SHORT
-                ).show()
+            AuthorizationResponse.Type.ERROR -> {
+                Log.e("MainActivity", "Auth error: " + response.error)
+                statusTextView.text = "Auth error: ${response.error}"
+                Toast.makeText(this, "Auth error: ${response.error}", Toast.LENGTH_LONG).show()
             }
+            AuthorizationResponse.Type.EMPTY,
+            AuthorizationResponse.Type.UNKNOWN -> {
+                Log.w("MainActivity", "Auth flow cancelled or resulted in an unknown state.")
+                statusTextView.text = "Auth flow cancelled"
+                Toast.makeText(this, "Spotify authentication cancelled.", Toast.LENGTH_SHORT).show()
+            }
+            else -> {}
         }
     }
 
     private fun connectToSpotifyAppRemote() {
         if (!SpotifyAppRemote.isSpotifyInstalled(applicationContext)) {
-            Toast.makeText(
-                this,
-                getString(R.string.install_spotify_prompt),
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Please install Spotify to use this feature.", Toast.LENGTH_LONG).show()
             return
         }
 
         val connectionParams = ConnectionParams.Builder(clientId)
             .setRedirectUri(redirectUri)
-            .showAuthView(true) // Show auth view if necessary
+            .showAuthView(true)
             .build()
 
         SpotifyAppRemote.connect(this, connectionParams, object : Connector.ConnectionListener {
