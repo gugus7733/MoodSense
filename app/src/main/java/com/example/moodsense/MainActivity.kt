@@ -1,114 +1,122 @@
 package com.example.moodsense
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.spotify.android.appremote.api.ConnectionParams
-import com.spotify.android.appremote.api.Connector
+import com.example.moodsense.spotify.DebugLog
+import com.example.moodsense.spotify.SpotifyConnector
+import com.example.moodsense.spotify.SpotifyDiagnostics
 import com.spotify.android.appremote.api.SpotifyAppRemote
 import com.spotify.protocol.types.Track
 import com.spotify.sdk.android.auth.AuthorizationClient
-import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SpotifyConnector.Listener {
 
     private val clientId = "4d864f8662144971ba0242cea48bfebf"
     private val redirectUri = "moodsense://callback"
+    private val authRequestCode = 1337
+
     private var spotifyAppRemote: SpotifyAppRemote? = null
-
-    private val AUTH_REQUEST_CODE = 1337
-
     private lateinit var statusTextView: TextView
+    private lateinit var diagnosticsTextView: TextView
+    private lateinit var diagnosticsContainer: LinearLayout
+    private lateinit var diagnosticsToggle: Button
+
+    private lateinit var diagnostics: SpotifyDiagnostics
+    private lateinit var connector: SpotifyConnector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusTextView = findViewById(R.id.status_textview)
+        diagnostics = SpotifyDiagnostics(applicationContext)
+        connector = SpotifyConnector(this, clientId, redirectUri, diagnostics, this)
 
-        // Setup button listeners
+        statusTextView = findViewById(R.id.status_textview)
+        diagnosticsTextView = findViewById(R.id.diagnostics_textview)
+        diagnosticsContainer = findViewById(R.id.diagnostics_container)
+        diagnosticsToggle = findViewById(R.id.toggle_diagnostics_button)
+
+        setupButtons()
+        setPlaybackControlsEnabled(false)
+        updateDiagnosticsText()
+
+        if (diagnostics.isProbablyEmulator()) {
+            statusTextView.visibility = View.VISIBLE
+            statusTextView.text = diagnostics.emulatorWarning()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        diagnostics.markRedirectReceived(intent?.dataString)
+        DebugLog.i(TAG, "onNewIntent called with data: ${intent?.data}")
+        updateDiagnosticsText()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
+        super.onActivityResult(requestCode, resultCode, intent)
+        if (requestCode == authRequestCode) {
+            val response = AuthorizationClient.getResponse(resultCode, intent)
+            connector.handleAuthorizationResponse(response, authRequestCode)
+            updateDiagnosticsText()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        spotifyAppRemote?.let { SpotifyAppRemote.disconnect(it) }
+        spotifyAppRemote = null
+        setPlaybackControlsEnabled(false)
+    }
+
+    override fun onStatusChanged(status: String) {
+        runOnUiThread {
+            statusTextView.visibility = View.VISIBLE
+            statusTextView.text = status
+            updateDiagnosticsText()
+        }
+    }
+
+    override fun onConnected(appRemote: SpotifyAppRemote) {
+        spotifyAppRemote = appRemote
+        runOnUiThread {
+            connected()
+            updateDiagnosticsText()
+        }
+    }
+
+    private fun setupButtons() {
         findViewById<Button>(R.id.connect_button).setOnClickListener {
             statusTextView.visibility = View.VISIBLE
             statusTextView.text = "Connecting..."
-            val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, redirectUri)
-            builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
-            val request = builder.build()
-            AuthorizationClient.openLoginActivity(this, AUTH_REQUEST_CODE, request)
+            connector.startAuthorization(authRequestCode)
+            if (diagnostics.isProbablyEmulator()) {
+                Toast.makeText(this, diagnostics.emulatorWarning(), Toast.LENGTH_LONG).show()
+            }
+            updateDiagnosticsText()
         }
         findViewById<Button>(R.id.play_button).setOnClickListener { spotifyAppRemote?.playerApi?.resume() }
         findViewById<Button>(R.id.pause_button).setOnClickListener { spotifyAppRemote?.playerApi?.pause() }
         findViewById<Button>(R.id.next_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipNext() }
         findViewById<Button>(R.id.prev_button).setOnClickListener { spotifyAppRemote?.playerApi?.skipPrevious() }
 
-        setPlaybackControlsEnabled(false)
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
-        super.onActivityResult(requestCode, resultCode, intent)
-
-        if (requestCode == AUTH_REQUEST_CODE) {
-            val response = AuthorizationClient.getResponse(resultCode, intent)
-            handleAuthorizationResponse(response)
+        diagnosticsToggle.setOnClickListener {
+            diagnosticsContainer.visibility = if (diagnosticsContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            diagnosticsToggle.text = if (diagnosticsContainer.visibility == View.VISIBLE) "Hide diagnostics" else "Show diagnostics"
+            updateDiagnosticsText()
         }
-    }
-
-    private fun handleAuthorizationResponse(response: AuthorizationResponse) {
-        when (response.type) {
-            AuthorizationResponse.Type.CODE -> {
-                val code = response.code
-                Log.d("MainActivity", "Got authorization code: $code")
-                connectToSpotifyAppRemote()
-            }
-            AuthorizationResponse.Type.ERROR -> {
-                Log.e("MainActivity", "Auth error: " + response.error)
-                statusTextView.text = "Auth error: ${response.error}"
-                Toast.makeText(this, "Auth error: ${response.error}", Toast.LENGTH_LONG).show()
-            }
-            AuthorizationResponse.Type.EMPTY,
-            AuthorizationResponse.Type.UNKNOWN -> {
-                Log.w("MainActivity", "Auth flow cancelled or resulted in an unknown state.")
-                statusTextView.text = "Auth flow cancelled"
-                Toast.makeText(this, "Spotify authentication cancelled.", Toast.LENGTH_SHORT).show()
-            }
-            else -> {}
-        }
-    }
-
-    private fun connectToSpotifyAppRemote() {
-        if (!SpotifyAppRemote.isSpotifyInstalled(applicationContext)) {
-            Toast.makeText(this, "Please install Spotify to use this feature.", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val connectionParams = ConnectionParams.Builder(clientId)
-            .setRedirectUri(redirectUri)
-            .showAuthView(true)
-            .build()
-
-        SpotifyAppRemote.connect(this, connectionParams, object : Connector.ConnectionListener {
-            override fun onConnected(appRemote: SpotifyAppRemote) {
-                spotifyAppRemote = appRemote
-                Log.d("MainActivity", "Connected! Yay!")
-                statusTextView.text = "Connected!"
-                connected()
-            }
-
-            override fun onFailure(throwable: Throwable) {
-                Log.e("MainActivity", throwable.message, throwable)
-                statusTextView.text = "Connection failed: ${throwable.message}"
-            }
-        })
+        findViewById<Button>(R.id.copy_diagnostics_button).setOnClickListener { copyDiagnosticsToClipboard() }
     }
 
     private fun connected() {
@@ -117,25 +125,14 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.track_name_textview).visibility = View.VISIBLE
 
         spotifyAppRemote?.playerApi?.play("spotify:playlist:37i9dQZF1DX2sUQwD7tbmL")
-
         spotifyAppRemote?.playerApi?.subscribeToPlayerState()?.setEventCallback { playerState ->
             val track: Track? = playerState.track
             if (track != null) {
                 findViewById<TextView>(R.id.track_name_textview).text = "Track: ${track.name} by ${track.artist.name}"
-                Log.d("MainActivity", "${track.name} by ${track.artist.name}")
+                DebugLog.i(TAG, "${track.name} by ${track.artist.name}")
             }
         }
-
         setPlaybackControlsEnabled(true)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        spotifyAppRemote?.let {
-            SpotifyAppRemote.disconnect(it)
-        }
-        spotifyAppRemote = null
-        setPlaybackControlsEnabled(false)
     }
 
     private fun setPlaybackControlsEnabled(isEnabled: Boolean) {
@@ -143,5 +140,21 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.pause_button).isEnabled = isEnabled
         findViewById<Button>(R.id.next_button).isEnabled = isEnabled
         findViewById<Button>(R.id.prev_button).isEnabled = isEnabled
+    }
+
+    private fun copyDiagnosticsToClipboard() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val diagnosticsText = diagnostics.formatDiagnostics(clientId, redirectUri)
+        val clip = ClipData.newPlainText("MoodSense diagnostics", diagnosticsText)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(this, "Diagnostics copied to clipboard", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateDiagnosticsText() {
+        diagnosticsTextView.text = diagnostics.formatDiagnostics(clientId, redirectUri)
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
