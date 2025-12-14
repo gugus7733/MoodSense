@@ -12,7 +12,8 @@ class SpotifyDiagnostics(private val context: Context) {
         var lastAuthStatus: String = "Not started",
         var lastConnectionStatus: String = "Not connected",
         var lastError: String = "",
-        var receivedRedirect: Boolean = false
+        var receivedRedirect: Boolean = false,
+        var lastTokenStatus: String = "No token"
     )
 
     val state: DiagnosticsState = DiagnosticsState()
@@ -92,6 +93,7 @@ class SpotifyDiagnostics(private val context: Context) {
         lines += "Client ID: $clientId"
         lines += "Redirect URI: $redirectUri"
         lines += "Received redirect intent: ${state.receivedRedirect}"
+        lines += "Token status: ${state.lastTokenStatus}"
         lines += "Auth status: ${state.lastAuthStatus}"
         lines += "Connection status: ${state.lastConnectionStatus}"
         if (state.lastError.isNotBlank()) {

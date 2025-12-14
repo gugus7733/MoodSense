@@ -16,15 +16,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        defaultConfig {
-            manifestPlaceholders.putAll(
-                mapOf(
-                    "moodsense" to "moodsense",
-                    "callback" to "callback"
-                )
-            )
-        }
     }
 
     buildTypes {
@@ -58,6 +49,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -66,7 +58,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation(libs.security.crypto)
     implementation("com.google.code.gson:gson:2.6.1")
-    implementation(files("../libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation(libs.app.remote)
     implementation(libs.auth)
 }
