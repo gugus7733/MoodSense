@@ -7,7 +7,7 @@ import com.spotify.android.appremote.api.SpotifyAppRemote
 import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationResponse
 import kotlin.math.min
-
+import com.spotify.sdk.android.auth.AuthorizationRequest
 class SpotifyConnector(
     private val activity: Activity,
     private val clientId: String,
