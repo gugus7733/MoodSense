@@ -4,10 +4,8 @@ import android.app.Activity
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
-import com.spotify.sdk.android.auth.AuthorizationClient
-import com.spotify.sdk.android.auth.AuthorizationResponse
 import kotlin.math.min
-import com.spotify.sdk.android.auth.AuthorizationRequest
+
 class SpotifyConnector(
     private val activity: Activity,
     private val clientId: String,
@@ -20,54 +18,13 @@ class SpotifyConnector(
     interface Listener {
         fun onStatusChanged(status: String)
         fun onConnected(appRemote: SpotifyAppRemote)
+        fun onAuthenticationFailed()
     }
 
-    private var accessToken: String? = null
     private var connectionAttempt = 0
     private val retryConfig = RetryConfig()
 
-    fun startAuthorization(authRequestCode: Int) {
-        diagnostics.state.lastAuthStatus = "Requesting token via implicit grant"
-        connectionAttempt = 0
-        listener.onStatusChanged("Requesting Spotify authorization...")
-        val builder = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.TOKEN, redirectUri)
-        builder.setScopes(arrayOf("streaming", "user-read-playback-state", "user-modify-playback-state"))
-        val request = builder.build()
-        DebugLog.i(TAG, "Opening Spotify login activity with redirect $redirectUri")
-        AuthorizationClient.openLoginActivity(activity, authRequestCode, request)
-    }
-
-    fun handleAuthorizationResponse(response: AuthorizationResponse, authRequestCode: Int) {
-        when (response.type) {
-            AuthorizationResponse.Type.TOKEN -> {
-                accessToken = response.accessToken
-                diagnostics.state.lastAuthStatus = "Token received (expires in ${response.expiresIn} seconds)"
-                listener.onStatusChanged("Token received, connecting to Spotify app...")
-                DebugLog.i(TAG, "Received access token, attempting app remote connection")
-                attemptConnect(authRequestCode)
-            }
-
-            AuthorizationResponse.Type.ERROR -> {
-                diagnostics.state.lastAuthStatus = "Auth error: ${response.error}"
-                diagnostics.state.lastError = response.error ?: "Unknown auth error"
-                DebugLog.e(TAG, "Auth error: ${response.error}")
-                listener.onStatusChanged("Auth error: ${response.error}")
-            }
-
-            AuthorizationResponse.Type.EMPTY, AuthorizationResponse.Type.UNKNOWN -> {
-                diagnostics.state.lastAuthStatus = "Auth cancelled or unknown response"
-                listener.onStatusChanged("Auth cancelled or unknown response")
-                DebugLog.e(TAG, "Auth response was empty or unknown: ${response.state}")
-            }
-
-            else -> {
-                diagnostics.state.lastAuthStatus = "Unhandled auth response: ${response.type}"
-                DebugLog.e(TAG, "Unhandled auth response type: ${response.type}")
-            }
-        }
-    }
-
-    fun attemptConnect(authRequestCode: Int) {
+    fun connect(accessToken: String) {
         if (!diagnostics.isSpotifyInstalled()) {
             val message = "Spotify app not installed. Install and log in to Spotify then retry."
             diagnostics.state.lastConnectionStatus = message
@@ -79,10 +36,11 @@ class SpotifyConnector(
         diagnostics.state.lastConnectionStatus = "Connecting (attempt $connectionAttempt)"
         val connectionParams = ConnectionParams.Builder(clientId)
             .setRedirectUri(redirectUri)
-            .showAuthView(true)
+            .setAccessToken(accessToken)
+            .showAuthView(false)
             .build()
 
-        DebugLog.i(TAG, "Connecting to SpotifyAppRemote attempt=$connectionAttempt redirect=$redirectUri")
+        DebugLog.i(TAG, "Connecting to SpotifyAppRemote attempt=$connectionAttempt redirect=$redirectUri with token")
         SpotifyAppRemote.connect(activity, connectionParams, object : Connector.ConnectionListener {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 diagnostics.state.lastConnectionStatus = "Connected"
@@ -96,12 +54,12 @@ class SpotifyConnector(
             override fun onFailure(throwable: Throwable) {
                 diagnostics.state.lastConnectionStatus = "Connection failed"
                 diagnostics.state.lastError = DebugLog.formatThrowable(throwable)
-                handleConnectionFailure(throwable, authRequestCode)
+                handleConnectionFailure(throwable)
             }
         })
     }
 
-    private fun handleConnectionFailure(throwable: Throwable, authRequestCode: Int) {
+    private fun handleConnectionFailure(throwable: Throwable) {
         val throwableSummary = DebugLog.formatThrowable(throwable)
         DebugLog.e(TAG, "SpotifyAppRemote connection failed", throwable)
         listener.onStatusChanged("Connect failed: $throwableSummary")
@@ -111,15 +69,22 @@ class SpotifyConnector(
             listener.onStatusChanged(guidance)
         }
 
-        val shouldRetryAuth = throwableSummary.contains("authentication", ignoreCase = true)
+        val shouldRetry = throwableSummary.contains("network", ignoreCase = true)
+                || throwableSummary.contains("connection", ignoreCase = true)
+        val authRelated = throwableSummary.contains("authentication", ignoreCase = true)
                 || throwableSummary.contains("AUTHENTICATION_SERVICE_UNAVAILABLE", ignoreCase = true)
+                || throwableSummary.contains("access token", ignoreCase = true)
         val hasRetriesLeft = connectionAttempt < retryConfig.maxAttempts
-        if (shouldRetryAuth && hasRetriesLeft) {
+        if (authRelated) {
+            listener.onAuthenticationFailed()
+            return
+        }
+        if (shouldRetry && hasRetriesLeft) {
             val delayIndex = min(connectionAttempt, retryConfig.backoffMillis.lastIndex)
             val delayMs = retryConfig.backoffMillis[delayIndex]
-            DebugLog.i(TAG, "Auth-related failure detected, retrying after ${delayMs}ms (attempt $connectionAttempt)")
+            DebugLog.i(TAG, "Transient failure detected, retrying after ${delayMs}ms (attempt $connectionAttempt)")
             activity.window.decorView.postDelayed({
-                startAuthorization(authRequestCode)
+                listener.onStatusChanged("Retrying connection...")
             }, delayMs)
         }
     }
